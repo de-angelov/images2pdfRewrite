@@ -37,22 +37,25 @@ export interface ResizedImageBag {
     size: Size
 }
 
-const ioParallel = array.sequence(IO.io)
-const teParallel = array.sequence(TE.taskEither)
-const teSeries = array.sequence(TE.taskEitherSeq)
-const sequenceTIO = sequenceT(IO.io)
+export const ioParallel = array.sequence(IO.io)
+export const teParallel = array.sequence(TE.taskEither)
+export const teSeries = array.sequence(TE.taskEitherSeq)
+export const sequenceTIO = sequenceT(IO.io)
 
-const cpuCountIO: IO.IO<number> = IO.io.map(() => os.cpus(), (_) => _.length)
-const exit: IO.IO<void> = () => process.exit()
+export const cpuCountIO: IO.IO<number> = IO.io.map(
+    () => os.cpus(),
+    (_) => _.length,
+)
+export const exit: IO.IO<void> = () => process.exit()
 
-const getImagePaths: (x: string) => TE.TaskEither<Error, string[]> = (
+export const getImagePaths: (x: string) => TE.TaskEither<Error, string[]> = (
     imagesDir,
 ) => TE.taskEither.map(recursiveTE(imagesDir), (files) => files.filter(isImage))
 
-const getParentDirName: (x: string) => O.Option<string> = (imagesPath) =>
+export const getParentDirName: (x: string) => O.Option<string> = (imagesPath) =>
     last(Path.dirname(imagesPath).split('/'))
 
-const ordImagesByName: Ord<ResizedImageBag> = contramap(
+export const ordImagesByName: Ord<ResizedImageBag> = contramap(
     (image: ResizedImageBag) => image.name.toLocaleLowerCase(),
 )(ordString)
 
@@ -61,7 +64,7 @@ type initOutput = <L>(
     y: PDFKit.PDFDocument,
 ) => TE.TaskEither<L, WriteStream>
 
-const initOutput: initOutput = (outputFile, doc) =>
+export const initOutput: initOutput = (outputFile, doc) =>
     TE.taskEither.fromIO(
         IO.io.chain(
             fs.createWriteStream(Path.resolve(outputFile)) as any,
@@ -71,14 +74,14 @@ const initOutput: initOutput = (outputFile, doc) =>
 
 type createSpinner = <L>() => TE.TaskEither<L, Ora>
 
-const createSpinner: createSpinner = () =>
+export const createSpinner: createSpinner = () =>
     TE.taskEither.fromIO(ora.create('Creating document...'))
 
 type processImage = (
     x: ProgressBar,
 ) => (y: string, z: Size) => TE.TaskEither<Error, ResizedImageBag>
 
-const processImage: processImage = (progressBarInstance) => (
+export const processImage: processImage = (progressBarInstance) => (
     imagePath,
     { width, height },
 ) => {
@@ -109,86 +112,87 @@ const processImage: processImage = (progressBarInstance) => (
             return result
         }),
     )
+}
 
-    type toSortedByName = (x: ResizedImageBag[][]) => ResizedImageBag[]
-    const toSortedByName: toSortedByName = flow(
-        flatten,
-        sort(ordImagesByName),
+type toSortedByName = (x: ResizedImageBag[][]) => ResizedImageBag[]
+export const toSortedByName: toSortedByName = flow(
+    flatten,
+    sort(ordImagesByName),
+)
+
+type prepareImages = (
+    x1: string[],
+    x2: Size,
+    x3: number,
+    x4: ProgressBar,
+) => TE.TaskEither<Error, ResizedImageBag[]>
+
+export const prepareImages: prepareImages = (
+    imagesPaths,
+    outputSize,
+    cpuCount,
+    progressBarInstance,
+) => {
+    const processImg = ((size: Size) => (imagePath: string) =>
+        processImage(progressBarInstance)(imagePath, size))(outputSize)
+
+    const resizeImageChunksInParallel = (chunk: string[]) =>
+        teParallel(chunk.map(processImg))
+
+    const resizedImages = teSeries(
+        chunksOf(cpuCount)(imagesPaths).map(resizeImageChunksInParallel),
     )
 
-    type prepareImages = (
-        x1: string[],
-        x2: Size,
-        x3: number,
-        x4: ProgressBar,
-    ) => TE.TaskEither<Error, ResizedImageBag[]>
+    return TE.taskEither.map(resizedImages, toSortedByName)
+}
 
-    const prepareImages: prepareImages = (
-        imagesPaths,
-        outputSize,
-        cpuCount,
-        progressBarInstance,
-    ) => {
-        const processImg = ((size: Size) => (imagePath: string) =>
-            processImage(progressBarInstance)(imagePath, size))(outputSize)
+type writeImagesToDocument = (
+    x1: PDFKit.PDFDocument,
+    x2: Ora,
+) => (x3: ResizedImageBag[]) => TE.TaskEither<Error, void>
 
-        const resizeImageChunksInParallel = (chunk: string[]) =>
-            teParallel(chunk.map(processImg))
+export const writeImagesToDocument: writeImagesToDocument = (
+    doc,
+    docSpinner,
+) => (images) => {
+    const IOComposition: any = flow(
+        () => ora.start(docSpinner),
+        IO.chain(() => ioParallel(images.map(d.addImageToDoc(doc)))),
+        IO.chain(() => d.closeDoc(doc)),
+    )
+    return TE.rightIO(IOComposition)
+}
 
-        const resizedImages = teSeries(
-            chunksOf(cpuCount)(imagesPaths).map(resizeImageChunksInParallel),
-        )
+type createProgressBar = <L>(x1: number) => TE.TaskEither<L, ProgressBar>
 
-        return TE.taskEither.map(resizedImages, toSortedByName)
-    }
+export const createProgressBar: createProgressBar = (progressBarLength) =>
+    TE.rightIO(
+        progressBar.create('Processing images [:bar] :current/:total', {
+            total: progressBarLength,
+            width: 17,
+        }),
+    )
 
-    type writeImagesToDocument = <L>(
-        x1: PDFKit.PDFDocument,
-        x2: Ora,
-    ) => (x3: ResizedImageBag[]) => TE.TaskEither<L, void>
+export const decodeArguments = (
+    cliArguments: unknown,
+): TE.TaskEither<Error, CLIArguments> =>
+    TE.fromEither(
+        either.mapLeft(
+            CLIArguments.decode(cliArguments),
+            (errors: any) => new Error(failure(errors).join('\n')),
+        ),
+    )
 
-    const writeImagesToDocument: writeImagesToDocument = (doc, docSpinner) => (
-        images,
-    ) => {
-        const IOComposition: any = flow(
-            () => ora.start(docSpinner),
-            IO.chain(() => ioParallel(images.map(d.addImagesToDoc(doc)))),
-            IO.chain(() => d.closeDoc(doc)),
-        )
-        return TE.rightIO(IOComposition)
-    }
+type stopSpinnerWithFailure = (
+    x1: Ora,
+) => (x2: Error) => TE.TaskEither<Error, void>
 
-    type createProgressBar = <L>(x1: number) => TE.TaskEither<L, ProgressBar>
+export const stopSpinnerWithFailure: stopSpinnerWithFailure = (docSpinner) => (
+    err,
+) => {
+    const cb = TE.rightIO<Error, void>(
+        IO.io.chain(ora.fail(docSpinner, err.message), () => constVoid),
+    )
 
-    const createProgressBar: createProgressBar = (progressBarLength) =>
-        TE.rightIO(
-            progressBar.create('Processing images [:bar] :current/:total', {
-                total: progressBarLength,
-                width: 17,
-            }),
-        )
-
-    const decodeArguments = (
-        cliArguments: unknown,
-    ): TE.TaskEither<Error, CLIArguments> =>
-        TE.fromEither(
-            either.mapLeft(
-                CLIArguments.decode(cliArguments),
-                (errors) => new Error(failure(errors).join('\n')),
-            ),
-        )
-
-    type stopSpinnerWithFailure = (
-        x1: Ora,
-    ) => (x2: Error) => TE.TaskEither<Error, void>
-
-    const stopSpinnerWithFailure: stopSpinnerWithFailure = (docSpinner) => (
-        err,
-    ) =>
-        TE.taskEither.chain(
-            TE.rightIO<Error, void>(
-                IO.io.chain(ora.fail(docSpinner, err.message), () => constVoid),
-            ),
-            () => TE.left(err),
-        )
+    return TE.taskEither.chain(cb, () => TE.left(err))
 }
