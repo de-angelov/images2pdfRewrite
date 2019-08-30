@@ -11,7 +11,7 @@ import {
     sequenceTIO,
     stopSpinnerWithFailure,
 } from './Operations'
-import { taskEither, right, rightIO } from 'fp-ts/lib/TaskEither'
+import { taskEither, right, rightIO, TaskEither } from 'fp-ts/lib/TaskEither'
 import { identity, constVoid, flow } from 'fp-ts/lib/function'
 import { Size, initOutput, createSpinner } from './Operations'
 import * as Path from 'path'

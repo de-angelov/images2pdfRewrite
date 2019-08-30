@@ -1,0 +1,1 @@
+{"version":3,"file":"progress.js","sourceRoot":"","sources":["../../src/fancyConsole/progress.ts"],"names":[],"mappings":";;AACA,sCAAuC;AAO1B,QAAA,MAAM,GAAW,UAAC,OAAO,EAAE,OAAO,IAAK,OAAA;IAChD,OAAA,IAAI,WAAW,CAAC,OAAO,EAAE,OAAO,CAAC;AAAjC,CAAiC,EADe,CACf,CAAA;AAGxB,QAAA,IAAI,GAAS,UAAC,WAAW,IAAK,OAAA,cAAM,OAAA,WAAW,CAAC,IAAI,EAAE,EAAlB,CAAkB,EAAxB,CAAwB,CAAA"}

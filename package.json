@@ -36,6 +36,7 @@
     "progress": "^2.0.3",
     "recursive-readdir": "^2.2.2",
     "sharp": "^0.23.0",
+    "typescript": "^3.6.2",
     "v": "^0.3.0",
     "yargs": "^13.3.0"
   },
