@@ -1,10 +1,10 @@
 import { IO } from 'fp-ts/lib/IO'
 import ora, { Ora } from 'ora'
 
-type create = (message: string) => IO<Ora>
-export const create = (message) => () => ora(message)
+type create = (x: string) => IO<Ora>
+export const create: create = (message) => () => ora(message)
 
-type start = (oraInstance: Ora) => IO<Ora>
+type start = (x: Ora) => IO<Ora>
 export const start: start = (oraInstance) => () => oraInstance.start()
 
 export const succeed = (oraInstance: Ora, message: string): IO<Ora> => () =>
